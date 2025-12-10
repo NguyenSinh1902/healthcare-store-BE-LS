@@ -53,7 +53,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (user != null) {
                     // Tao doi tuong authentication tu user
                     var authToken = new UsernamePasswordAuthenticationToken(
-                            user, null, null); // tam thoi chua can authorities
+                            user, null, user.getAuthorities());
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                     // Dat authentication vao context

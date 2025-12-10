@@ -2,7 +2,7 @@ package iuh.fit.se.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod; // Import mới quan trọng
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -35,72 +35,52 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                //CẤU HÌNH CORS
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-                // Tắt CSRF
                 .csrf(csrf -> csrf.disable())
-
-                //Stateless Session
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                //PHÂN QUYỀN
                 .authorizeHttpRequests(auth -> auth
-                        //PUBLIC ENDPOINTS
+                        // Public
                         .requestMatchers("/api/auth/**", "/api/upload/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/categories/**", "/api/products/**", "/api/coupons/**").permitAll()
 
-                        //PUBLIC GET
-                        .requestMatchers(HttpMethod.GET,
-                                "/api/categories/**",
-                                "/api/products/**",
-                                "/api/coupons/**"
-                        ).permitAll()
-
-                        //ADMIN SPECIFIC ROUTES
+                        // === QUAN TRỌNG: SỬA LẠI PHẦN NÀY ===
+                        // Vì Entity trả về "ROLE_ADMIN", ta dùng hasRole("ADMIN")
+                        // Spring sẽ tự động thêm prefix "ROLE_" để so sánh -> Khớp thành "ROLE_ADMIN"
 
                         // Dashboard
-                        .requestMatchers("/api/dashboard/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/dashboard/**").hasRole("ADMIN")
 
-                        // Orders: Update Status (PUT /api/orders/{id}/status)
-                        .requestMatchers(HttpMethod.PUT, "/api/orders/*/status").hasAuthority("ADMIN")
+                        // Orders Status
+                        .requestMatchers(HttpMethod.PUT, "/api/orders/*/status").hasRole("ADMIN")
 
-                        // Profile: Admin ban/active user (PUT /api/profile/admin/{id}/status)
-                        .requestMatchers(HttpMethod.PUT, "/api/profile/admin/*/status").hasAuthority("ADMIN")
+                        // Profile Admin actions
+                        .requestMatchers(HttpMethod.PUT, "/api/profile/admin/*/status").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/profile/**").hasRole("ADMIN")
 
-                        // Profile: Delete User
-                        .requestMatchers(HttpMethod.DELETE, "/api/profile/**").hasAuthority("ADMIN")
+                        // Categories/Products/Coupons CRUD
+                        .requestMatchers(HttpMethod.POST, "/api/categories/**", "/api/products/**", "/api/coupons/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/categories/**", "/api/products/**", "/api/coupons/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/categories/**", "/api/products/**", "/api/coupons/**").hasRole("ADMIN")
 
-                        //Products/Categories/Coupons (POST, PUT, DELETE)
-                        .requestMatchers(HttpMethod.POST, "/api/categories/**", "/api/products/**", "/api/coupons/**").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/categories/**", "/api/products/**", "/api/coupons/**").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/categories/**", "/api/products/**", "/api/coupons/**").hasAuthority("ADMIN")
-
-                        //USER/AUTHENTICATED ROUTES
-
-                        //Cart: Phải có token
+                        // Authenticated Users
                         .requestMatchers("/api/cart/**", "/api/cart-items/**").authenticated()
-
-                        //Orders:
                         .requestMatchers("/api/orders/**").authenticated()
-
-                        // Profile
                         .requestMatchers("/api/profile/**").authenticated()
 
-                        // CÁC REQUEST CÒN LẠI -> Phải đăng nhập
                         .anyRequest().authenticated()
                 )
 
-                // Xử lý lỗi (Exception Handling)
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
-                            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401
+                            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             res.setContentType("application/json");
-                            res.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"Please log in to proceed.\"}");
+                            res.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"Token missing or invalid\"}");
                         })
                         .accessDeniedHandler((req, res, e) -> {
-                            res.setStatus(HttpServletResponse.SC_FORBIDDEN); // 403
+                            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
                             res.setContentType("application/json");
-                            res.getWriter().write("{\"error\": \"Forbidden\", \"message\": \"You do not have Admin rights to perform this operation\"}");
+                            res.getWriter().write("{\"error\": \"Forbidden\", \"message\": \"Access Denied: You need ROLE_ADMIN\"}");
                         })
                 )
 
@@ -110,6 +90,7 @@ public class SecurityConfig {
         return http.build();
     }
 
+    // Các Bean khác giữ nguyên...
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
